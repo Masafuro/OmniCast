@@ -47,3 +47,11 @@ def test_export_script_roundtrip() -> None:
     proj = Project(title="Demo", blocks=blocks)
     out = export_script(proj)
     assert out == "@Alice: Hello\n\n@Dave: World\n"
+
+
+def test_parse_script_strips_utf8_bom() -> None:
+    script = "\ufeff@Alice: BOM付きのテキストファイルです。\n@Bob: 問題なく読めます。"
+    blocks, warnings = parse_script(script)
+    assert warnings == []
+    assert [b.voice_id for b in blocks] == ["Alice", "Bob"]
+    assert blocks[0].text == "BOM付きのテキストファイルです。"

@@ -71,6 +71,9 @@ const el = {
   importDialog: document.getElementById("import-dialog"),
   btnCloseImport: document.getElementById("btn-close-import"),
   importCharsHelp: document.getElementById("import-chars-help"),
+  importScriptFile: document.getElementById("import-script-file"),
+  btnLoadScriptFile: document.getElementById("btn-load-script-file"),
+  importFileName: document.getElementById("import-file-name"),
   importTextarea: document.getElementById("import-textarea"),
   importWarnings: document.getElementById("import-warnings"),
   btnFillSample: document.getElementById("btn-fill-sample"),
@@ -980,6 +983,35 @@ async function adoptDesignPreview(previewItem) {
   }
 }
 
+async function readScriptFileText(file) {
+  const buf = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf).replace(/^\uFEFF/, "");
+  } catch {
+    try {
+      return new TextDecoder("shift_jis", { fatal: true }).decode(buf);
+    } catch {
+      return new TextDecoder("utf-8").decode(buf).replace(/^\uFEFF/, "");
+    }
+  }
+}
+
+async function loadScriptFileIntoTextarea(file) {
+  if (!file) return;
+  try {
+    const text = await readScriptFileText(file);
+    el.importTextarea.value = text;
+    el.importFileName.textContent = `読み込み済み: ${file.name}`;
+    el.importWarnings.classList.add("hidden");
+    el.importWarnings.textContent = "";
+  } catch (err) {
+    el.importWarnings.textContent = `ファイル読み込みエラー: ${err.message}`;
+    el.importWarnings.classList.remove("hidden");
+  } finally {
+    el.importScriptFile.value = "";
+  }
+}
+
 function wireEvents() {
   el.tabStudio.addEventListener("click", () => switchTab("studio"));
   el.tabCast.addEventListener("click", () => switchTab("cast"));
@@ -1042,9 +1074,32 @@ function wireEvents() {
   el.btnOpenImport.addEventListener("click", () => {
     el.importWarnings.classList.add("hidden");
     el.importWarnings.textContent = "";
+    el.importScriptFile.value = "";
+    el.importFileName.textContent = "または下の欄に直接入力・.txtをドラッグ＆ドロップ";
     el.importDialog.showModal();
   });
   el.btnCloseImport.addEventListener("click", () => el.importDialog.close());
+  el.btnLoadScriptFile.addEventListener("click", () => {
+    el.importScriptFile.click();
+  });
+  el.importScriptFile.addEventListener("change", async () => {
+    const file = el.importScriptFile.files?.[0];
+    if (file) await loadScriptFileIntoTextarea(file);
+  });
+  el.importTextarea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    el.importTextarea.classList.add("drag-over");
+  });
+  el.importTextarea.addEventListener("dragleave", () => {
+    el.importTextarea.classList.remove("drag-over");
+  });
+  el.importTextarea.addEventListener("drop", async (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    e.preventDefault();
+    el.importTextarea.classList.remove("drag-over");
+    await loadScriptFileIntoTextarea(file);
+  });
   el.btnFillSample.addEventListener("click", () => {
     el.importTextarea.value = SAMPLE_SCRIPT;
   });

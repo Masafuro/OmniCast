@@ -31,6 +31,7 @@ def parse_script(
     voices: list[VoiceProfile] | None = None,
 ) -> tuple[list[Block], list[str]]:
     """Parse `@Name: text` script lines into Block objects plus warning strings."""
+    script_text = script_text.lstrip("\ufeff")
     blocks: list[Block] = []
     warnings: list[str] = []
     warned_unknown: set[str] = set()
