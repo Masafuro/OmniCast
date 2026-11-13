@@ -1,0 +1,9 @@
+{
+  "name": "OmniCast Studio",
+  "short_name": "OmniCast",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#38bdf8",
+  "description": "Generate podcasts and narration audio from scripts using OmniVoice."
+}

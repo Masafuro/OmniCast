@@ -13,6 +13,7 @@ secrets/
 config.local.*
 
 # Generated audio, voice samples & caches
+data/
 output/
 outputs/
 cache/
