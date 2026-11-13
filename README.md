@@ -4,15 +4,18 @@ Generate podcasts and multi-purpose narration audio from scripts using [k2-fsa/O
 
 OmniCast provides a lightweight **FastAPI + Web UI** studio where you can import a `@Name: text` script, generate lines incrementally, retake individual lines and compare takes, tune pauses between utterances, preview playback continuously in the browser, and export a stitched `.wav` or `.mp3` episode via `ffmpeg`.
 
-## Features (rev1)
+## Features (rev2)
 
-- **Script Import / Export (`@Name: text`)**: Simple line-oriented script syntax with multi-line utterances and `#` comments.
-- **5 Built-in Default Characters**: `Alice`, `Bob`, `Carol`, `Dave`, `Narrator` (mapped to OmniVoice Voice Design presets).
+- **Script Import / Export (`@Name: text`)**: Simple line-oriented script syntax with multi-line utterances and `#` comments (supports both built-in and custom characters).
+- **5 Built-in Default Characters + Custom Cast Lab (`🎭 Cast`)**:
+  - Starts with `Alice`, `Bob`, `Carol`, `Dave`, `Narrator`
+  - Create custom characters (including Japanese names), audition voices via OmniVoice Voice Design, or upload an existing audio file (`24kHz mono WAV` auto-normalized)
+  - Adopt a base reference voice to switch a character into **Clone mode (`/_clone_fn`)** for consistent timbre across an entire episode
 - **Per-Block Take Management**:
   - Generate / regenerate all unlocked lines at once (`一括 Generate`)
   - Retake individual lines (`🔄 リテイク`) and switch between generated takes (`T1`, `T2`, ...)
   - Lock finished lines (`🔒 ロック`) to protect them from accidental regeneration
-  - Override reading (`tts_text`), speed, language, and style per line
+  - Override reading (`tts_text`), speed, language, `instruct` (in Clone mode), and style per line
 - **Instant Pause Tuning & Continuous Playback**: Adjust `pause_after` per line in the GUI and preview continuously via Web Audio API.
 - **Audio Export**: Stitch selected takes with silence trimming, fade-in, pause gaps, and optional loudness normalization (`ffmpeg`) to WAV or MP3.
 

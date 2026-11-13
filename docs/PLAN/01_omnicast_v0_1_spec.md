@@ -195,5 +195,5 @@ rev1 では独立したボイスプロファイル管理画面（Cast タブ）�
 2. **コアドメイン・パーサー・音声結合**: `Project` / `Block` / `Take` モデル、デフォルト 5 キャラクター定義、`@Name: text` 台本パーサー、`ffmpeg` 結合エクスポーター＋自動テスト
 3. **FastAPI サーバー & Studio Web UI**: 全 API エンドポイント、台本インポート、区画ごとの再生/リテイク/テイク切替/ロック/間調整、Web Audio API 通し PLAY、WAV/MP3 Export、PWA Manifest
 
-### rev2（拡張：ボイスプロファイル管理）
-4. **Cast 管理 & Voice Cloning 統合**: `data/voices/` 永続化、音声アップロード、Voice Design ラボからのベース音声登録、`/_clone_fn` 切替対応
+### rev2（実装済み：Cast 管理 & Voice Cloning 統合）
+4. **Cast 管理 & Voice Cloning 統合**: `data/voices/` 永続化、音声アップロード（`24kHz mono WAV` 正規化）、Voice Design ラボでの試作・ベース音声採用、クローン発話テスト、Studio 側での `/_clone_fn`・`instruct` 対応

@@ -10,17 +10,21 @@
 <body>
   <header class="topbar">
     <div class="brand-group">
-      <h1 class="brand">OmniCast <span class="badge-rev">rev1</span></h1>
+      <h1 class="brand">OmniCast <span class="badge-rev">rev2</span></h1>
+      <nav class="nav-tabs" aria-label="画面切替">
+        <button id="tab-studio" class="tab-btn active" type="button">🎙 Studio</button>
+        <button id="tab-cast" class="tab-btn" type="button">🎭 Cast（キャラ作成）</button>
+      </nav>
       <span id="health-pill" class="pill pill-muted">接続確認中...</span>
     </div>
 
-    <div class="project-bar">
+    <div id="studio-project-bar" class="project-bar">
       <select id="project-select" aria-label="プロジェクト選択"></select>
       <button id="btn-new-project" class="btn btn-secondary" type="button">+ 新規</button>
       <button id="btn-delete-project" class="btn btn-danger-outline" type="button" title="現在のプロジェクトを削除">削除</button>
     </div>
 
-    <div class="action-bar">
+    <div id="studio-action-bar" class="action-bar">
       <button id="btn-open-import" class="btn btn-secondary" type="button">📥 台本インポート</button>
       <button id="btn-export-script" class="btn btn-secondary" type="button">📝 台本保存</button>
       <button id="btn-generate-all" class="btn btn-primary" type="button" title="ロックされていないすべてのセリフを生成・再生成します">⚡ 一括 Generate</button>
@@ -63,12 +67,14 @@
     <span id="status-message" class="status-text"></span>
   </section>
 
-  <main class="container">
+  <!-- Studio View -->
+  <main id="studio-view" class="container">
     <div id="empty-state" class="empty-state hidden">
       <h2>OmniCast Studio へようこそ</h2>
-      <p>デフォルトキャラクター（Alice / Bob / Carol / Dave / Narrator）を使って、台本から音声を作成できます。</p>
+      <p>デフォルトまたは Cast タブで作成したキャラクターを使って、台本から音声を作成できます。</p>
       <div class="empty-actions">
-        <button id="btn-create-sample" class="btn btn-primary" type="button">サンプル台本でプロジェクトを作成</button>
+        <button id="btn-create-sample" class="btn btn-primary" type="button">日本語サンプルで作成</button>
+        <button id="btn-create-sample-en" class="btn btn-primary" type="button">英語サンプルで作成</button>
         <button id="btn-create-blank" class="btn btn-secondary" type="button">空のプロジェクトを作成</button>
       </div>
     </div>
@@ -80,15 +86,150 @@
     </div>
   </main>
 
+  <!-- Cast / Character Creation View -->
+  <main id="cast-view" class="container cast-container hidden">
+    <div class="cast-layout">
+      <aside class="cast-sidebar">
+        <div class="cast-sidebar-header">
+          <h2>キャラクター一覧</h2>
+          <div class="cast-sidebar-actions">
+            <button id="btn-open-voice-import" class="btn btn-secondary btn-sm" type="button">📥 Import</button>
+            <button id="btn-new-voice" class="btn btn-primary btn-sm" type="button">+ 新規作成</button>
+          </div>
+        </div>
+        <div id="voice-list" class="voice-list"></div>
+      </aside>
+
+      <section id="voice-editor" class="cast-editor">
+        <div class="cast-header">
+          <div>
+            <h2 id="voice-editor-title">キャラクター設定</h2>
+            <span id="voice-mode-badge" class="pill pill-muted">-</span>
+          </div>
+          <div class="cast-header-actions">
+            <span id="cast-status-message" class="status-text"></span>
+            <button id="btn-export-voice" class="btn btn-secondary btn-sm" type="button">📤 Export</button>
+            <button id="btn-delete-voice" class="btn btn-danger-outline btn-sm" type="button">削除 / リセット</button>
+          </div>
+        </div>
+
+        <!-- Basic Info -->
+        <div class="lab-card">
+          <h3>基本設定</h3>
+          <div class="form-grid">
+            <label>
+              <span>名前（台本の @Name に使用）</span>
+              <input id="v-name" type="text" />
+            </label>
+            <label>
+              <span>役割・メモ</span>
+              <input id="v-role" type="text" placeholder="例：明るいメインホスト" />
+            </label>
+            <label>
+              <span>既定言語</span>
+              <select id="v-lang">
+                <option value="Auto">Auto</option>
+                <option value="Japanese">Japanese</option>
+                <option value="English">English</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Korean">Korean</option>
+              </select>
+            </label>
+            <label>
+              <span>既定話速 (0.5〜2.0)</span>
+              <input id="v-speed" type="number" step="0.05" min="0.5" max="2.0" />
+            </label>
+            <label>
+              <span>既定 instruct（Clone 時の感情・話し方指示）</span>
+              <input id="v-instruct" type="text" placeholder="任意（例：落ち着いたトーンで）" />
+            </label>
+            <label>
+              <span>参照テキスト ref_text（通常は空欄推奨）</span>
+              <input id="v-reftext" type="text" placeholder="空欄のままでも自然です" />
+            </label>
+          </div>
+          <div class="lab-actions">
+            <button id="btn-save-voice" class="btn btn-primary btn-sm" type="button">基本設定を保存</button>
+          </div>
+        </div>
+
+        <!-- Current Reference Audio Status -->
+        <div class="lab-card">
+          <div class="lab-card-header">
+            <h3>ベース音声（Clone アンカー）</h3>
+            <div id="v-ref-actions" class="lab-inline-actions"></div>
+          </div>
+          <div id="v-ref-status" class="ref-status-box"></div>
+        </div>
+
+        <!-- Method A: Voice Design Lab -->
+        <div class="lab-card">
+          <div class="lab-card-header">
+            <h3>方法 A：Voice Design で試作してベース音声を作る</h3>
+            <button id="btn-save-design-attrs" class="btn btn-secondary btn-sm" type="button">属性をキャラに保存</button>
+          </div>
+          <div class="form-grid">
+            <label><span>性別 (Gender)</span><select id="v-gender"></select></label>
+            <label><span>年齢 (Age)</span><select id="v-age"></select></label>
+            <label><span>音調 (Pitch)</span><select id="v-pitch"></select></label>
+            <label><span>スタイル (Style)</span><select id="v-style"></select></label>
+            <label><span>英語アクセント</span><select id="v-accent"></select></label>
+            <label><span>中国語方言</span><select id="v-dialect"></select></label>
+          </div>
+          <label class="full-field">
+            <span>試作セリフ</span>
+            <textarea id="design-preview-text" rows="2">こんにちは。新しいキャラクターのテスト音声です。よろしくお願いします。</textarea>
+          </label>
+          <div class="lab-actions">
+            <button id="btn-design-preview" class="btn btn-primary" type="button">✨ 試作音声を生成</button>
+            <button id="btn-design-sample-ja" class="btn btn-secondary btn-sm" type="button">日本語例文</button>
+            <button id="btn-design-sample-en" class="btn btn-secondary btn-sm" type="button">English Sample</button>
+            <button id="btn-clear-design-previews" class="btn btn-danger-outline btn-sm hidden" type="button">🗑️ 試作をすべて削除</button>
+          </div>
+          <div id="design-preview-list" class="preview-list"></div>
+        </div>
+
+        <!-- Method B: Upload Audio -->
+        <div class="lab-card">
+          <h3>方法 B：手元の音声ファイルをアップロードして登録</h3>
+          <p class="lab-help">WAV / MP3 / M4A 等をアップロードすると自動で 24kHz モノラル WAV に変換してベース音声に設定します。</p>
+          <div class="upload-row">
+            <input id="v-upload-file" type="file" accept="audio/*" />
+            <button id="btn-upload-ref" class="btn btn-secondary" type="button">📤 アップロードして設定</button>
+          </div>
+        </div>
+
+        <!-- Test Speech -->
+        <div class="lab-card">
+          <h3>🧪 クローン発話テスト（このキャラの声で別セリフを確認）</h3>
+          <div class="form-grid">
+            <label>
+              <span>テストセリフ</span>
+              <input id="clone-test-text" type="text" value="なるほど、この声なら長編のポッドキャストでも安定して聴けますね！" />
+            </label>
+            <label>
+              <span>テスト用 instruct（Clone 時のみ有効）</span>
+              <input id="clone-test-instruct" type="text" placeholder="任意" />
+            </label>
+          </div>
+          <div class="lab-actions">
+            <button id="btn-clone-test" class="btn btn-accent" type="button">🧪 テスト発話を生成</button>
+            <button id="btn-clone-sample-ja" class="btn btn-secondary btn-sm" type="button">日本語例文</button>
+            <button id="btn-clone-sample-en" class="btn btn-secondary btn-sm" type="button">English Sample</button>
+          </div>
+          <div id="clone-test-result" class="test-audio-box hidden"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
   <dialog id="import-dialog" class="modal">
     <form method="dialog" class="modal-card">
       <div class="modal-header">
         <h3>台本インポート（@Name: text）</h3>
         <button id="btn-close-import" class="btn-icon" type="button">✕</button>
       </div>
-      <p class="modal-help">
-        使用可能キャラ: <code>Alice</code>, <code>Bob</code>, <code>Carol</code>, <code>Dave</code>, <code>Narrator</code>（<code>#</code> 始まりはコメント）
-      </p>
+      <p id="import-chars-help" class="modal-help"></p>
       <textarea id="import-textarea" rows="12" placeholder="@Alice: こんにちは、OmniCastへようこそ！&#10;@Bob: よろしくお願いします。今日もいい天気ですね。"></textarea>
       <div class="modal-options">
         <label><input type="radio" name="import-mode" value="replace" checked /> 現在の台本を置き換える</label>
@@ -96,8 +237,31 @@
       </div>
       <div id="import-warnings" class="warning-box hidden"></div>
       <div class="modal-footer">
-        <button id="btn-fill-sample" class="btn btn-secondary" type="button">サンプルを挿入</button>
+        <div class="lab-inline-actions">
+          <button id="btn-fill-sample" class="btn btn-secondary" type="button">日本語サンプル</button>
+          <button id="btn-fill-sample-en" class="btn btn-secondary" type="button">English Sample</button>
+        </div>
         <button id="btn-confirm-import" class="btn btn-primary" type="button">インポート実行</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="voice-import-dialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-header">
+        <h3>キャラクターインポート（.zip）</h3>
+        <button id="btn-close-voice-import" class="btn-icon" type="button">✕</button>
+      </div>
+      <p class="modal-help">エクスポートしたキャラクターZIP（<code>.omnicast-voice.zip</code>）を読み込みます。<code>profile.json</code> とベース音声（Clone時）を復元します。</p>
+      <div class="field">
+        <span>ZIP ファイル選択</span>
+        <input id="voice-import-file" type="file" accept=".zip" />
+      </div>
+      <div class="modal-options">
+        <label><input id="voice-import-overwrite" type="checkbox" /> 同じIDまたは名前の既存キャラクターがある場合は上書きする（オフの場合は別名として保存）</label>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-confirm-voice-import" class="btn btn-primary" type="button">インポート実行</button>
       </div>
     </form>
   </dialog>

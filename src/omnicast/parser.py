@@ -1,21 +1,40 @@
-"""Line-oriented `@Name: text` script parser and exporter for OmniCast rev1."""
+"""Line-oriented `@Name: text` script parser and exporter for OmniCast."""
 
 from __future__ import annotations
 
 import re
 
 from omnicast.characters import FALLBACK_CHARACTER, resolve_character
-from omnicast.models import Block, Project
+from omnicast.models import Block, Project, VoiceProfile
 
 # Matches `@SpeakerName: optional initial text`
 _SPEAKER_LINE_RE = re.compile(r"^\s*@([^:\s][^:]*?)\s*:\s*(.*)$")
 
 
-def parse_script(script_text: str, default_pause: float = 0.45) -> tuple[list[Block], list[str]]:
+def _resolve_speaker(
+    raw_speaker: str,
+    voices: list[VoiceProfile] | None = None,
+) -> tuple[str, bool]:
+    key = raw_speaker.strip().lower()
+    if voices:
+        for voice in voices:
+            if voice.id.lower() == key or voice.name.lower() == key:
+                return voice.id, True
+        return voices[0].id, False
+    preset, matched = resolve_character(raw_speaker)
+    return preset.id, matched
+
+
+def parse_script(
+    script_text: str,
+    default_pause: float = 0.45,
+    voices: list[VoiceProfile] | None = None,
+) -> tuple[list[Block], list[str]]:
     """Parse `@Name: text` script lines into Block objects plus warning strings."""
     blocks: list[Block] = []
     warnings: list[str] = []
     warned_unknown: set[str] = set()
+    fallback_id = voices[0].id if voices else FALLBACK_CHARACTER.id
 
     current_voice: str | None = None
     current_lines: list[str] = []
@@ -45,13 +64,13 @@ def parse_script(script_text: str, default_pause: float = 0.45) -> tuple[list[Bl
         if match:
             flush_current()
             raw_speaker, first_text = match.group(1), match.group(2)
-            preset, matched = resolve_character(raw_speaker)
+            voice_id, matched = _resolve_speaker(raw_speaker, voices=voices)
             if not matched and raw_speaker.strip() not in warned_unknown:
                 warned_unknown.add(raw_speaker.strip())
                 warnings.append(
-                    f"Line {line_no}: unknown speaker '@{raw_speaker.strip()}' mapped to '{FALLBACK_CHARACTER.id}'."
+                    f"Line {line_no}: unknown speaker '@{raw_speaker.strip()}' mapped to '{fallback_id}'."
                 )
-            current_voice = preset.id
+            current_voice = voice_id
             current_lines = [first_text.strip()] if first_text.strip() else []
             continue
 
@@ -63,9 +82,9 @@ def parse_script(script_text: str, default_pause: float = 0.45) -> tuple[list[Bl
 
         if current_voice is None:
             warnings.append(
-                f"Line {line_no}: text before any @Speaker line assigned to '{FALLBACK_CHARACTER.id}'."
+                f"Line {line_no}: text before any @Speaker line assigned to '{fallback_id}'."
             )
-            current_voice = FALLBACK_CHARACTER.id
+            current_voice = fallback_id
             current_lines = [stripped]
         else:
             current_lines.append(stripped)
@@ -74,15 +93,20 @@ def parse_script(script_text: str, default_pause: float = 0.45) -> tuple[list[Bl
     return blocks, warnings
 
 
-def export_script(project: Project) -> str:
+def export_script(
+    project: Project,
+    voices: list[VoiceProfile] | None = None,
+) -> str:
     """Serialize a Project's blocks back into `@Name: text` script format."""
+    name_by_id = {v.id: v.name for v in voices} if voices else {}
     chunks: list[str] = []
     for block in project.blocks:
         text = block.text.strip()
         if not text:
             continue
+        speaker_label = name_by_id.get(block.voice_id, block.voice_id)
         lines = text.splitlines()
-        first = f"@{block.voice_id}: {lines[0]}"
+        first = f"@{speaker_label}: {lines[0]}"
         if len(lines) > 1:
             chunks.append("\n".join([first, *lines[1:]]))
         else:

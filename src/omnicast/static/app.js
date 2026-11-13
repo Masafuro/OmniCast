@@ -3,6 +3,16 @@ const SAMPLE_SCRIPT = `# OmniCast サンプル台本
 @Bob: よろしくお願いします。気になるセリフだけ後からリテイクしたり、間の秒数を調整できるのが便利ですね。
 @Alice: そうなんです。まずは一括 Generate を押して、全体を聴きながら調整してみてください！`;
 
+const SAMPLE_SCRIPT_EN = `# OmniCast English Sample Script
+@Alice: Welcome back to OmniCast! Today we're demonstrating how easy it is to build a multi-speaker podcast from a simple script.
+@Bob: Glad to be here! What I love is that you can retake a single line, switch takes, and fine-tune the pauses right in the browser.
+@Carol: And once you lock in a character's base voice in the Cast tab, every line stays remarkably consistent.`;
+
+const DESIGN_SAMPLE_JA = "こんにちは。新しいキャラクターのテスト音声です。よろしくお願いします。";
+const DESIGN_SAMPLE_EN = "Hello everyone! I'm testing a brand new voice profile for OmniCast Studio.";
+const CLONE_TEST_JA = "なるほど、この声なら長編のポッドキャストでも安定して聴けますね！";
+const CLONE_TEST_EN = "Exactly! With a solid reference voice, every single line sounds natural and consistent.";
+
 const STATUS_LABEL = {
   unbuilt: "未生成",
   dirty: "要再生成",
@@ -11,7 +21,11 @@ const STATUS_LABEL = {
 };
 
 const state = {
+  activeTab: "studio",
   characters: [],
+  designOptions: {},
+  selectedVoiceId: null,
+  designPreviews: [],
   projects: [],
   currentProject: null,
   isBusy: false,
@@ -23,6 +37,12 @@ const state = {
 };
 
 const el = {
+  tabStudio: document.getElementById("tab-studio"),
+  tabCast: document.getElementById("tab-cast"),
+  studioProjectBar: document.getElementById("studio-project-bar"),
+  studioActionBar: document.getElementById("studio-action-bar"),
+  studioView: document.getElementById("studio-view"),
+  castView: document.getElementById("cast-view"),
   healthPill: document.getElementById("health-pill"),
   projectSelect: document.getElementById("project-select"),
   btnNewProject: document.getElementById("btn-new-project"),
@@ -43,27 +63,80 @@ const el = {
   statusMessage: document.getElementById("status-message"),
   emptyState: document.getElementById("empty-state"),
   btnCreateSample: document.getElementById("btn-create-sample"),
+  btnCreateSampleEn: document.getElementById("btn-create-sample-en"),
   btnCreateBlank: document.getElementById("btn-create-blank"),
   blocksContainer: document.getElementById("blocks-container"),
   bottomAddWrap: document.getElementById("bottom-add-wrap"),
   btnAddBlockEnd: document.getElementById("btn-add-block-end"),
   importDialog: document.getElementById("import-dialog"),
   btnCloseImport: document.getElementById("btn-close-import"),
+  importCharsHelp: document.getElementById("import-chars-help"),
   importTextarea: document.getElementById("import-textarea"),
   importWarnings: document.getElementById("import-warnings"),
   btnFillSample: document.getElementById("btn-fill-sample"),
+  btnFillSampleEn: document.getElementById("btn-fill-sample-en"),
   btnConfirmImport: document.getElementById("btn-confirm-import"),
+  // Cast elements
+  voiceList: document.getElementById("voice-list"),
+  btnOpenVoiceImport: document.getElementById("btn-open-voice-import"),
+  btnNewVoice: document.getElementById("btn-new-voice"),
+  voiceEditorTitle: document.getElementById("voice-editor-title"),
+  voiceModeBadge: document.getElementById("voice-mode-badge"),
+  castStatusMessage: document.getElementById("cast-status-message"),
+  btnExportVoice: document.getElementById("btn-export-voice"),
+  btnDeleteVoice: document.getElementById("btn-delete-voice"),
+  voiceImportDialog: document.getElementById("voice-import-dialog"),
+  btnCloseVoiceImport: document.getElementById("btn-close-voice-import"),
+  voiceImportFile: document.getElementById("voice-import-file"),
+  voiceImportOverwrite: document.getElementById("voice-import-overwrite"),
+  btnConfirmVoiceImport: document.getElementById("btn-confirm-voice-import"),
+  vName: document.getElementById("v-name"),
+  vRole: document.getElementById("v-role"),
+  vLang: document.getElementById("v-lang"),
+  vSpeed: document.getElementById("v-speed"),
+  vInstruct: document.getElementById("v-instruct"),
+  vRefText: document.getElementById("v-reftext"),
+  btnSaveVoice: document.getElementById("btn-save-voice"),
+  vRefActions: document.getElementById("v-ref-actions"),
+  vRefStatus: document.getElementById("v-ref-status"),
+  vGender: document.getElementById("v-gender"),
+  vAge: document.getElementById("v-age"),
+  vPitch: document.getElementById("v-pitch"),
+  vStyle: document.getElementById("v-style"),
+  vAccent: document.getElementById("v-accent"),
+  vDialect: document.getElementById("v-dialect"),
+  btnSaveDesignAttrs: document.getElementById("btn-save-design-attrs"),
+  designPreviewText: document.getElementById("design-preview-text"),
+  btnDesignPreview: document.getElementById("btn-design-preview"),
+  btnDesignSampleJa: document.getElementById("btn-design-sample-ja"),
+  btnDesignSampleEn: document.getElementById("btn-design-sample-en"),
+  btnClearDesignPreviews: document.getElementById("btn-clear-design-previews"),
+  designPreviewList: document.getElementById("design-preview-list"),
+  vUploadFile: document.getElementById("v-upload-file"),
+  btnUploadRef: document.getElementById("btn-upload-ref"),
+  cloneTestText: document.getElementById("clone-test-text"),
+  cloneTestInstruct: document.getElementById("clone-test-instruct"),
+  btnCloneTest: document.getElementById("btn-clone-test"),
+  btnCloneSampleJa: document.getElementById("btn-clone-sample-ja"),
+  btnCloneSampleEn: document.getElementById("btn-clone-sample-en"),
+  cloneTestResult: document.getElementById("clone-test-result"),
 };
 
 function setStatus(msg) {
   el.statusMessage.textContent = msg || "";
 }
 
+function setCastStatus(msg) {
+  el.castStatusMessage.textContent = msg || "";
+}
+
 async function apiFetch(url, options = {}) {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(options.headers || {}) }
+    : { "Content-Type": "application/json", ...(options.headers || {}) };
+
+  const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -88,6 +161,31 @@ function takeUrl(projectId, filename) {
   return `/api/projects/${encodeURIComponent(projectId)}/takes/${encodeURIComponent(filename)}`;
 }
 
+async function switchTab(tab) {
+  state.activeTab = tab;
+  const isStudio = tab === "studio";
+  el.tabStudio.classList.toggle("active", isStudio);
+  el.tabCast.classList.toggle("active", !isStudio);
+  el.studioProjectBar.classList.toggle("hidden", !isStudio);
+  el.studioActionBar.classList.toggle("hidden", !isStudio);
+  el.studioView.classList.toggle("hidden", !isStudio);
+  el.castView.classList.toggle("hidden", isStudio);
+
+  if (isStudio) {
+    await refreshVoices();
+    if (state.currentProject) {
+      await loadProject(state.currentProject.id);
+    } else {
+      renderProject();
+    }
+  } else {
+    stopAllPlayback();
+    el.settingsBar.classList.add("hidden");
+    await refreshVoices();
+    renderCastView();
+  }
+}
+
 async function refreshHealth() {
   try {
     const info = await apiFetch("/api/health");
@@ -103,6 +201,15 @@ async function refreshHealth() {
     el.healthPill.textContent = `接続エラー: ${err.message}`;
     el.healthPill.className = "pill pill-dirty";
   }
+}
+
+async function refreshVoices() {
+  state.characters = await apiFetch("/api/voices");
+  if (!state.selectedVoiceId || !state.characters.some((v) => v.id === state.selectedVoiceId)) {
+    state.selectedVoiceId = state.characters[0]?.id || null;
+  }
+  const names = state.characters.map((v) => v.name).join(", ");
+  el.importCharsHelp.textContent = `使用可能キャラ: ${names}（# 始まりはコメント）`;
 }
 
 async function refreshProjects(selectId = null) {
@@ -139,8 +246,9 @@ async function loadProject(projectId) {
 function renderProject() {
   const proj = state.currentProject;
   const hasProj = Boolean(proj);
+  const isStudio = state.activeTab === "studio";
 
-  el.settingsBar.classList.toggle("hidden", !hasProj);
+  el.settingsBar.classList.toggle("hidden", !hasProj || !isStudio);
   el.emptyState.classList.toggle("hidden", hasProj);
   el.bottomAddWrap.classList.toggle("hidden", !hasProj);
   el.btnDeleteProject.disabled = !hasProj;
@@ -173,7 +281,6 @@ function renderBlockCard(project, block, idx) {
   card.className = `block-card${block.locked ? " is-locked" : ""}`;
   card.dataset.blockId = block.id;
 
-  // Header
   const header = document.createElement("div");
   header.className = "block-header";
 
@@ -185,7 +292,7 @@ function renderBlockCard(project, block, idx) {
   for (const ch of state.characters) {
     const opt = document.createElement("option");
     opt.value = ch.id;
-    opt.textContent = `${ch.name}`;
+    opt.textContent = ch.mode === "clone" ? `${ch.name} [Clone]` : ch.name;
     voiceSelect.appendChild(opt);
   }
   voiceSelect.value = block.voice_id;
@@ -215,7 +322,6 @@ function renderBlockCard(project, block, idx) {
   tools.append(btnUp, btnDown, btnInsert, btnDel);
   header.append(idxSpan, voiceSelect, statusPill, tools);
 
-  // Textarea
   const textarea = document.createElement("textarea");
   textarea.className = "block-textarea";
   textarea.value = block.text;
@@ -226,14 +332,19 @@ function renderBlockCard(project, block, idx) {
     }
   });
 
-  // Details (optional overrides)
   const details = document.createElement("details");
   details.className = "block-details";
-  if (block.tts_text || block.speed || block.lang || (block.style && block.style !== "Auto")) {
+  if (
+    block.tts_text ||
+    block.speed ||
+    block.lang ||
+    block.instruct ||
+    (block.style && block.style !== "Auto")
+  ) {
     details.open = true;
   }
   const summary = document.createElement("summary");
-  summary.textContent = "読み・話速・言語の個別調整";
+  summary.textContent = "読み・話速・言語・指示の個別調整";
   const grid = document.createElement("div");
   grid.className = "details-grid";
 
@@ -250,7 +361,7 @@ function renderBlockCard(project, block, idx) {
   speedInput.step = "0.05";
   speedInput.min = "0.5";
   speedInput.max = "2.0";
-  speedInput.placeholder = "1.0";
+  speedInput.placeholder = "キャラ既定";
   speedInput.value = block.speed ?? "";
   speedInput.addEventListener("change", () => {
     const val = speedInput.value.trim();
@@ -261,12 +372,20 @@ function renderBlockCard(project, block, idx) {
   for (const optVal of ["", "Auto", "Japanese", "English", "Chinese", "Korean"]) {
     const o = document.createElement("option");
     o.value = optVal;
-    o.textContent = optVal ? optVal : "プロジェクト既定";
+    o.textContent = optVal ? optVal : "キャラ/プロジェクト既定";
     langSelect.appendChild(o);
   }
   langSelect.value = block.lang || "";
   langSelect.addEventListener("change", () =>
     patchBlock(block.id, { lang: langSelect.value || null })
+  );
+
+  const instructInput = document.createElement("input");
+  instructInput.type = "text";
+  instructInput.placeholder = "Clone時の感情・話し方指示";
+  instructInput.value = block.instruct || "";
+  instructInput.addEventListener("change", () =>
+    patchBlock(block.id, { instruct: instructInput.value.trim() || null })
   );
 
   const styleSelect = document.createElement("select");
@@ -288,11 +407,11 @@ function renderBlockCard(project, block, idx) {
     wrapField("読み上げテキスト (tts_text)", ttsInput),
     wrapField("話速 (0.5〜2.0)", speedInput),
     wrapField("言語", langSelect),
-    wrapField("スタイル", styleSelect)
+    wrapField("指示 (instruct / Clone時)", instructInput),
+    wrapField("スタイル (Design時)", styleSelect)
   );
   details.append(summary, grid);
 
-  // Controls
   const controls = document.createElement("div");
   controls.className = "block-controls";
 
@@ -616,10 +735,10 @@ async function playAllFrom(startIndex = 0) {
   }
 }
 
-async function createProject(title, initialScript = null) {
+async function createProject(title, initialScript = null, defaultLang = "Auto") {
   const proj = await apiFetch("/api/projects", {
     method: "POST",
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, default_lang: defaultLang }),
   });
   if (initialScript) {
     await apiFetch(`/api/projects/${encodeURIComponent(proj.id)}/import-script`, {
@@ -656,7 +775,215 @@ async function exportEpisode(fmt) {
   }
 }
 
+// --- Cast / Character Lab ---
+
+function populateSelectOptions(selectEl, options) {
+  selectEl.innerHTML = "";
+  for (const val of options || []) {
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = val;
+    selectEl.appendChild(opt);
+  }
+}
+
+function currentVoice() {
+  return state.characters.find((v) => v.id === state.selectedVoiceId) || state.characters[0] || null;
+}
+
+function renderCastView() {
+  el.voiceList.innerHTML = "";
+  for (const v of state.characters) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `voice-item${v.id === state.selectedVoiceId ? " active" : ""}`;
+    btn.addEventListener("click", () => {
+      state.selectedVoiceId = v.id;
+      el.cloneTestResult.classList.add("hidden");
+      renderCastView();
+    });
+
+    const top = document.createElement("div");
+    top.className = "voice-item-top";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = v.name;
+    const badge = document.createElement("span");
+    badge.className = `pill ${v.mode === "clone" ? "pill-ready" : "pill-unbuilt"}`;
+    badge.textContent = v.mode === "clone" ? "Clone" : "Design";
+    top.append(nameSpan, badge);
+
+    const roleSpan = document.createElement("span");
+    roleSpan.className = "voice-item-role";
+    roleSpan.textContent = v.role || (v.is_builtin ? "標準キャラクター" : "カスタムキャラクター");
+
+    btn.append(top, roleSpan);
+    el.voiceList.appendChild(btn);
+  }
+
+  const v = currentVoice();
+  if (!v) return;
+
+  el.voiceEditorTitle.textContent = v.name;
+  el.voiceModeBadge.className = `pill ${v.mode === "clone" ? "pill-ready" : "pill-dirty"}`;
+  el.voiceModeBadge.textContent =
+    v.mode === "clone" ? "Clone（ベース音声固定中）" : "Design（属性プリセット）";
+
+  if (v.is_builtin) {
+    el.btnDeleteVoice.textContent = "初期プリセットに戻す";
+    el.btnDeleteVoice.disabled = !v.is_customized;
+  } else {
+    el.btnDeleteVoice.textContent = "このキャラを削除";
+    el.btnDeleteVoice.disabled = false;
+  }
+
+  el.vName.value = v.name;
+  el.vName.disabled = v.is_builtin;
+  el.vRole.value = v.role || "";
+  el.vLang.value = v.lang || "Auto";
+  el.vSpeed.value = v.default_speed ?? 1.0;
+  el.vInstruct.value = v.default_instruct || "";
+  el.vRefText.value = v.ref_text || "";
+
+  el.vGender.value = v.gender || "Auto";
+  el.vAge.value = v.age || "Auto";
+  el.vPitch.value = v.pitch || "Auto";
+  el.vStyle.value = v.style || "Auto";
+  el.vAccent.value = v.english_accent || "Auto";
+  el.vDialect.value = v.chinese_dialect || "Auto";
+
+  // Ref audio status
+  el.vRefActions.innerHTML = "";
+  el.vRefStatus.innerHTML = "";
+  if (v.ref_audio) {
+    const dur = v.ref_audio_duration ? `${v.ref_audio_duration.toFixed(2)}s` : "";
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = `/api/voices/${encodeURIComponent(v.id)}/ref-audio?v=${v.ref_version}`;
+    const info = document.createElement("div");
+    info.textContent =
+      v.mode === "clone"
+        ? `この音声をベースとして Clone 合成を使用します (${dur})`
+        : `ベース音声は保存済みですが、現在は Design モードになっています (${dur})`;
+    el.vRefStatus.append(info, audio);
+
+    if (v.mode === "clone") {
+      const btnUseDesign = document.createElement("button");
+      btnUseDesign.type = "button";
+      btnUseDesign.className = "btn btn-secondary btn-sm";
+      btnUseDesign.textContent = "一時的に Design モードへ切替";
+      btnUseDesign.addEventListener("click", () => updateVoice(v.id, { mode: "design" }));
+      el.vRefActions.appendChild(btnUseDesign);
+    } else {
+      const btnUseClone = document.createElement("button");
+      btnUseClone.type = "button";
+      btnUseClone.className = "btn btn-accent btn-sm";
+      btnUseClone.textContent = "Clone モードを有効化";
+      btnUseClone.addEventListener("click", () => updateVoice(v.id, { mode: "clone" }));
+      el.vRefActions.appendChild(btnUseClone);
+    }
+  } else {
+    el.vRefStatus.textContent =
+      "まだベース音声が設定されていません。下の方法 A（Design で試作）または方法 B（音声アップロード）で登録できます。";
+  }
+
+  renderDesignPreviews();
+}
+
+function renderDesignPreviews() {
+  el.designPreviewList.innerHTML = "";
+  el.btnClearDesignPreviews.classList.toggle("hidden", state.designPreviews.length === 0);
+  const v = currentVoice();
+  state.designPreviews.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "preview-row";
+
+    const label = document.createElement("strong");
+    label.textContent = `#${idx + 1} (${item.duration.toFixed(1)}s)`;
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = item.audio_url;
+
+    const btnAdopt = document.createElement("button");
+    btnAdopt.type = "button";
+    btnAdopt.className = "btn btn-accent btn-sm";
+    btnAdopt.textContent = v ? `📌 「${v.name}」のベース音声に採用` : "📌 採用";
+    btnAdopt.disabled = !v;
+    btnAdopt.addEventListener("click", () => adoptDesignPreview(item));
+
+    const btnDelete = document.createElement("button");
+    btnDelete.type = "button";
+    btnDelete.className = "btn btn-danger-outline btn-sm";
+    btnDelete.textContent = "🗑️ 削除";
+    btnDelete.addEventListener("click", () => removeDesignPreview(item, btnDelete));
+
+    row.append(label, audio, btnAdopt, btnDelete);
+    el.designPreviewList.appendChild(row);
+  });
+}
+
+async function deleteDraftPreviewFile(previewFile) {
+  const res = await fetch(`/api/voices/drafts/${encodeURIComponent(previewFile)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 404) {
+    const payload = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(payload.detail || `HTTP ${res.status}`);
+  }
+}
+
+async function removeDesignPreview(previewItem, buttonEl) {
+  if (buttonEl) buttonEl.disabled = true;
+  try {
+    await deleteDraftPreviewFile(previewItem.preview_file);
+    state.designPreviews = state.designPreviews.filter(
+      (p) => p.preview_file !== previewItem.preview_file
+    );
+    renderDesignPreviews();
+    setCastStatus("試作音声を削除しました");
+  } catch (err) {
+    if (buttonEl) buttonEl.disabled = false;
+    setCastStatus(`試作削除エラー: ${err.message}`);
+  }
+}
+
+async function updateVoice(voiceId, body) {
+  setCastStatus("保存中...");
+  try {
+    const updated = await apiFetch(`/api/voices/${encodeURIComponent(voiceId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    await refreshVoices();
+    state.selectedVoiceId = updated.id;
+    renderCastView();
+    setCastStatus("保存しました");
+  } catch (err) {
+    setCastStatus(`保存エラー: ${err.message}`);
+  }
+}
+
+async function adoptDesignPreview(previewItem) {
+  const v = currentVoice();
+  if (!v) return;
+  setCastStatus("ベース音声を登録中...");
+  try {
+    await apiFetch(`/api/voices/${encodeURIComponent(v.id)}/adopt-preview`, {
+      method: "POST",
+      body: JSON.stringify({ preview_file: previewItem.preview_file, ref_text: "" }),
+    });
+    await refreshVoices();
+    renderCastView();
+    setCastStatus(`「${v.name}」のベース音声を採用しました（Clone 有効）`);
+  } catch (err) {
+    setCastStatus(`採用エラー: ${err.message}`);
+  }
+}
+
 function wireEvents() {
+  el.tabStudio.addEventListener("click", () => switchTab("studio"));
+  el.tabCast.addEventListener("click", () => switchTab("cast"));
+
   el.projectSelect.addEventListener("change", () => {
     if (el.projectSelect.value) loadProject(el.projectSelect.value);
   });
@@ -676,7 +1003,10 @@ function wireEvents() {
   });
 
   el.btnCreateSample.addEventListener("click", () =>
-    createProject("Sample Episode", SAMPLE_SCRIPT)
+    createProject("Sample Episode (JP)", SAMPLE_SCRIPT, "Japanese")
+  );
+  el.btnCreateSampleEn.addEventListener("click", () =>
+    createProject("Sample Episode (EN)", SAMPLE_SCRIPT_EN, "English")
   );
   el.btnCreateBlank.addEventListener("click", () => createProject("New Episode"));
 
@@ -717,6 +1047,9 @@ function wireEvents() {
   el.btnCloseImport.addEventListener("click", () => el.importDialog.close());
   el.btnFillSample.addEventListener("click", () => {
     el.importTextarea.value = SAMPLE_SCRIPT;
+  });
+  el.btnFillSampleEn.addEventListener("click", () => {
+    el.importTextarea.value = SAMPLE_SCRIPT_EN;
   });
 
   el.btnConfirmImport.addEventListener("click", async () => {
@@ -766,11 +1099,268 @@ function wireEvents() {
   el.btnStopAll.addEventListener("click", stopAllPlayback);
   el.btnExportWav.addEventListener("click", () => exportEpisode("wav"));
   el.btnExportMp3.addEventListener("click", () => exportEpisode("mp3"));
+
+  // Cast Events
+  el.btnOpenVoiceImport.addEventListener("click", () => {
+    el.voiceImportFile.value = "";
+    el.voiceImportOverwrite.checked = false;
+    el.voiceImportDialog.showModal();
+  });
+
+  el.btnCloseVoiceImport.addEventListener("click", () => {
+    el.voiceImportDialog.close();
+  });
+
+  el.btnConfirmVoiceImport.addEventListener("click", async () => {
+    const file = el.voiceImportFile.files?.[0];
+    if (!file) {
+      setCastStatus("インポートするZIPファイルを選択してください");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("conflict", el.voiceImportOverwrite.checked ? "overwrite" : "rename");
+    el.btnConfirmVoiceImport.disabled = true;
+    setCastStatus("キャラクターをインポート中...");
+    try {
+      const imported = await apiFetch("/api/voices/import", {
+        method: "POST",
+        body: fd,
+      });
+      el.voiceImportDialog.close();
+      await refreshVoices();
+      state.selectedVoiceId = imported.id;
+      renderCastView();
+      if (state.project) {
+        state.project = await apiFetch(`/api/projects/${state.project.id}`);
+        renderBlocks();
+      }
+      setCastStatus(`「${imported.name}」をインポートしました`);
+    } catch (err) {
+      setCastStatus(`インポートエラー: ${err.message}`);
+    } finally {
+      el.btnConfirmVoiceImport.disabled = false;
+    }
+  });
+
+  el.btnExportVoice.addEventListener("click", () => {
+    const v = currentVoice();
+    if (!v) return;
+    const link = document.createElement("a");
+    link.href = `/api/voices/${encodeURIComponent(v.id)}/export`;
+    link.download = `${v.name}.omnicast-voice.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setCastStatus(`「${v.name}」をエクスポートしました`);
+  });
+
+  el.btnNewVoice.addEventListener("click", async () => {
+    const name = window.prompt("新しいキャラクター名（台本で @名前: の形で使えます）", "Mika");
+    if (!name || !name.trim()) return;
+    try {
+      const created = await apiFetch("/api/voices", {
+        method: "POST",
+        body: JSON.stringify({ name: name.trim(), lang: "Japanese" }),
+      });
+      await refreshVoices();
+      state.selectedVoiceId = created.id;
+      renderCastView();
+      setCastStatus(`「${created.name}」を作成しました`);
+    } catch (err) {
+      setCastStatus(`作成エラー: ${err.message}`);
+    }
+  });
+
+  el.btnDeleteVoice.addEventListener("click", async () => {
+    const v = currentVoice();
+    if (!v) return;
+    const msg = v.is_builtin
+      ? `「${v.name}」のカスタマイズを削除し、初期プリセットに戻しますか？`
+      : `キャラクター「${v.name}」を削除しますか？`;
+    if (!window.confirm(msg)) return;
+    try {
+      await apiFetch(`/api/voices/${encodeURIComponent(v.id)}`, { method: "DELETE" });
+      await refreshVoices();
+      renderCastView();
+      setCastStatus(v.is_builtin ? "初期プリセットに戻しました" : "削除しました");
+    } catch (err) {
+      setCastStatus(`削除エラー: ${err.message}`);
+    }
+  });
+
+  el.btnSaveVoice.addEventListener("click", () => {
+    const v = currentVoice();
+    if (!v) return;
+    const body = {
+      role: el.vRole.value,
+      lang: el.vLang.value,
+      default_speed: parseFloat(el.vSpeed.value) || 1.0,
+      default_instruct: el.vInstruct.value,
+      ref_text: el.vRefText.value,
+    };
+    if (!v.is_builtin) {
+      body.name = el.vName.value.trim() || v.name;
+    }
+    updateVoice(v.id, body);
+  });
+
+  el.btnSaveDesignAttrs.addEventListener("click", () => {
+    const v = currentVoice();
+    if (!v) return;
+    updateVoice(v.id, {
+      gender: el.vGender.value,
+      age: el.vAge.value,
+      pitch: el.vPitch.value,
+      style: el.vStyle.value,
+      english_accent: el.vAccent.value,
+      chinese_dialect: el.vDialect.value,
+    });
+  });
+
+  el.btnDesignSampleJa.addEventListener("click", () => {
+    el.designPreviewText.value = DESIGN_SAMPLE_JA;
+  });
+  el.btnDesignSampleEn.addEventListener("click", () => {
+    el.designPreviewText.value = DESIGN_SAMPLE_EN;
+  });
+  el.btnClearDesignPreviews.addEventListener("click", async () => {
+    if (state.designPreviews.length === 0) return;
+    if (!window.confirm(`表示中の試作音声（${state.designPreviews.length}件）をすべて削除しますか？`)) {
+      return;
+    }
+    el.btnClearDesignPreviews.disabled = true;
+    try {
+      const items = [...state.designPreviews];
+      const results = await Promise.allSettled(
+        items.map(async (item) => {
+          await deleteDraftPreviewFile(item.preview_file);
+          return item.preview_file;
+        })
+      );
+      const deleted = new Set(
+        results.filter((r) => r.status === "fulfilled").map((r) => r.value)
+      );
+      state.designPreviews = state.designPreviews.filter((p) => !deleted.has(p.preview_file));
+      renderDesignPreviews();
+      const firstRejected = results.find((r) => r.status === "rejected");
+      if (firstRejected) {
+        setCastStatus(`一括削除エラー: ${firstRejected.reason.message}`);
+      } else {
+        setCastStatus("試作音声をすべて削除しました");
+      }
+    } finally {
+      el.btnClearDesignPreviews.disabled = false;
+    }
+  });
+  el.btnCloneSampleJa.addEventListener("click", () => {
+    el.cloneTestText.value = CLONE_TEST_JA;
+  });
+  el.btnCloneSampleEn.addEventListener("click", () => {
+    el.cloneTestText.value = CLONE_TEST_EN;
+  });
+
+  el.btnDesignPreview.addEventListener("click", async () => {
+    const text = el.designPreviewText.value.trim();
+    if (!text) return;
+    el.btnDesignPreview.disabled = true;
+    setCastStatus("試作音声を生成中...");
+    try {
+      const res = await apiFetch("/api/voices/design-preview", {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          lang: el.vLang.value || "Auto",
+          speed: parseFloat(el.vSpeed.value) || 1.0,
+          gender: el.vGender.value,
+          age: el.vAge.value,
+          pitch: el.vPitch.value,
+          style: el.vStyle.value,
+          english_accent: el.vAccent.value,
+          chinese_dialect: el.vDialect.value,
+        }),
+      });
+      state.designPreviews.unshift(res);
+      renderDesignPreviews();
+      setCastStatus("試作音声を生成しました");
+    } catch (err) {
+      setCastStatus(`試作エラー: ${err.message}`);
+    } finally {
+      el.btnDesignPreview.disabled = false;
+    }
+  });
+
+  el.btnUploadRef.addEventListener("click", async () => {
+    const v = currentVoice();
+    const file = el.vUploadFile.files?.[0];
+    if (!v || !file) {
+      setCastStatus("アップロードする音声ファイルを選択してください");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    el.btnUploadRef.disabled = true;
+    setCastStatus("音声を変換・登録中...");
+    try {
+      await apiFetch(`/api/voices/${encodeURIComponent(v.id)}/ref-audio`, {
+        method: "POST",
+        body: fd,
+      });
+      el.vUploadFile.value = "";
+      await refreshVoices();
+      renderCastView();
+      setCastStatus(`「${v.name}」のベース音声をアップロード設定しました`);
+    } catch (err) {
+      setCastStatus(`アップロードエラー: ${err.message}`);
+    } finally {
+      el.btnUploadRef.disabled = false;
+    }
+  });
+
+  el.btnCloneTest.addEventListener("click", async () => {
+    const v = currentVoice();
+    const text = el.cloneTestText.value.trim();
+    if (!v || !text) return;
+    el.btnCloneTest.disabled = true;
+    setCastStatus("テスト発話を生成中...");
+    try {
+      const res = await apiFetch(`/api/voices/${encodeURIComponent(v.id)}/clone-preview`, {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          instruct: el.cloneTestInstruct.value,
+        }),
+      });
+      el.cloneTestResult.innerHTML = "";
+      const badge = document.createElement("span");
+      badge.className = "pill pill-ready";
+      badge.textContent = `${res.mode_used} (${res.duration.toFixed(1)}s)`;
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.autoplay = true;
+      audio.src = res.audio_url;
+      el.cloneTestResult.append(badge, audio);
+      el.cloneTestResult.classList.remove("hidden");
+      setCastStatus("テスト発話を生成しました");
+    } catch (err) {
+      setCastStatus(`テスト発話エラー: ${err.message}`);
+    } finally {
+      el.btnCloneTest.disabled = false;
+    }
+  });
 }
 
 async function init() {
   wireEvents();
-  state.characters = await apiFetch("/api/characters");
+  state.designOptions = await apiFetch("/api/voices/options");
+  populateSelectOptions(el.vGender, state.designOptions.gender);
+  populateSelectOptions(el.vAge, state.designOptions.age);
+  populateSelectOptions(el.vPitch, state.designOptions.pitch);
+  populateSelectOptions(el.vStyle, state.designOptions.style);
+  populateSelectOptions(el.vAccent, state.designOptions.english_accent);
+  populateSelectOptions(el.vDialect, state.designOptions.chinese_dialect);
+
+  await refreshVoices();
   await refreshHealth();
   await refreshProjects();
 }

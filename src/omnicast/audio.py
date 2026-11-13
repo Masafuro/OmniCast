@@ -34,6 +34,30 @@ def ffprobe_duration(path: Path) -> float:
         raise AudioProcessingError(f"Unexpected ffprobe duration output: {res.stdout!r}") from exc
 
 
+def normalize_to_wav(src_path: Path, dst_path: Path) -> Path:
+    """Convert any uploaded audio file into 24kHz mono 16-bit PCM WAV."""
+    if not src_path.exists():
+        raise AudioProcessingError(f"Source audio file not found: {src_path}")
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(src_path),
+        "-ar",
+        str(SAMPLE_RATE),
+        "-ac",
+        "1",
+        "-codec:a",
+        "pcm_s16le",
+        str(dst_path),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if res.returncode != 0:
+        raise AudioProcessingError(f"ffmpeg audio conversion failed: {res.stderr.strip()}")
+    return dst_path
+
+
 def export_project_audio(
     take_entries: list[tuple[Path, float]],
     out_path: Path,
