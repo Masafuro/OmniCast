@@ -1,0 +1,52 @@
+# Personal / Private workspace (connection info, local memos, voice samples, etc.)
+Private/
+
+# Environment variables & local secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.local.yaml
+*.local.yml
+*.local.toml
+*.local.json
+config.local.*
+
+# Generated audio, voice samples & caches
+output/
+outputs/
+cache/
+.cache/
+tmp/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+!tests/fixtures/**
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node.js (in case a Web UI is added later)
+node_modules/
+
+# OS & Editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
