@@ -36,6 +36,8 @@ cp .env.example .env
 
 Edit `.env` to point `OMNIVOICE_URL` at your OmniVoice Gradio server (for example `http://127.0.0.1:8000` when running on the same GPU machine).
 
+For a full Windows GPU host guide (including PowerShell setup, Windows Firewall rules for LAN access, on-demand launch workflow, and data migration), see [docs/setup_windows.md](docs/setup_windows.md).
+
 ## Run
 
 ```bash
